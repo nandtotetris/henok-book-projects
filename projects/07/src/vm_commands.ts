@@ -1,0 +1,14 @@
+enum VM_COMMANDS {
+  C_ARITHMETIC = 1,
+  C_PUSH,
+  C_POP,
+  C_LABEL,
+  C_IF
+}
+
+enum STACK_OPEARTIONS {
+  C_PUSH = 1,
+  C_POP
+}
+
+export { VM_COMMANDS, STACK_OPEARTIONS };
