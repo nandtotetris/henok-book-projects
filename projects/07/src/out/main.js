@@ -34,65 +34,152 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
-var _this = this;
 Object.defineProperty(exports, "__esModule", { value: true });
 var fs = require("fs");
 var parser_1 = require("./parser");
 var code_writer_1 = require("./code_writer");
 var vm_commands_1 = require("./vm_commands");
-var FILE_NAME_REGEX = /\.*\/*([a-zA-z_]+)\.\w+/;
+var FOLDER_NAME = /\.*\/(\w+)/;
+var ASSM_FILE_NAME = "main.asm";
+var FILE_NAME_REGEX = /\.*\/*([a-zA-Z]+\w+\.vm)\b/;
+var VM_FILE_REGEX = /(\w+)\.vm\b/;
+var FIRST_MATCH = 1;
 var VMTranslator = /** @class */ (function () {
     function VMTranslator() {
         var _this = this;
         this.getParser = function () { return _this.parser; };
         this.getCodeWriter = function () { return _this.codeWriter; };
-        this.save = function (path) {
-            fs.writeFileSync(path, _this.getAssemblyCode(path));
-        };
-        this.getAssemblyCode = function (filePath) {
+        this.save = function (path) { return __awaiter(_this, void 0, void 0, function () {
+            var finalAssm, outPath, isPathDir, folderName, files, vmFiles, parsersForEachVmFile, i, vmFile, parser, i, vmFile, parser, vmFileAssm, fileName, fileNameWithoutExtenstion, parser;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0:
+                        finalAssm = "";
+                        outPath = "";
+                        isPathDir = fs.existsSync(path) && fs.lstatSync(path).isDirectory();
+                        if (!isPathDir) return [3 /*break*/, 6];
+                        folderName = this.getFolderName(path);
+                        outPath = path + "/" + folderName + ".asm";
+                        return [4 /*yield*/, this.getFilesInDirectory(path)];
+                    case 1:
+                        files = _a.sent();
+                        vmFiles = this.filterVMFiles(files);
+                        if (vmFiles.length > 1) {
+                            finalAssm += this.codeWriter.writeInit();
+                        }
+                        parsersForEachVmFile = [];
+                        i = 0;
+                        _a.label = 2;
+                    case 2:
+                        if (!(i < vmFiles.length)) return [3 /*break*/, 5];
+                        vmFile = vmFiles[i];
+                        return [4 /*yield*/, parser_1.default.createAsync(path + "/" + vmFile)];
+                    case 3:
+                        parser = _a.sent();
+                        parsersForEachVmFile.push(parser);
+                        _a.label = 4;
+                    case 4:
+                        i++;
+                        return [3 /*break*/, 2];
+                    case 5:
+                        for (i = 0; i < parsersForEachVmFile.length; i++) {
+                            vmFile = vmFiles[i];
+                            parser = parsersForEachVmFile[i];
+                            vmFileAssm = this.getAssemblyCode(vmFile, parser);
+                            finalAssm += vmFileAssm;
+                            finalAssm += "\n";
+                        }
+                        return [3 /*break*/, 8];
+                    case 6:
+                        fileName = this.getFileNameInRelativePath(path);
+                        fileNameWithoutExtenstion = this.getFileNameWithoutExtenstion(fileName);
+                        outPath = "../" + fileNameWithoutExtenstion + ".asm";
+                        return [4 /*yield*/, parser_1.default.createAsync(path)];
+                    case 7:
+                        parser = _a.sent();
+                        finalAssm = this.getAssemblyCode(fileName, parser);
+                        _a.label = 8;
+                    case 8:
+                        fs.writeFileSync("" + outPath, finalAssm);
+                        return [2 /*return*/];
+                }
+            });
+        }); };
+        this.getAssemblyCode = function (filePath, parser) {
             var final_assm = "";
-            _this.parser.advance();
+            parser.advance();
             _this.codeWriter.setFileName(_this.getFileName(filePath));
-            while (_this.parser.hasMoreCommands()) {
-                switch (_this.parser.commandType()) {
+            while (parser.hasMoreCommands()) {
+                switch (parser.commandType()) {
                     case vm_commands_1.VM_COMMANDS.C_PUSH:
-                        final_assm += _this.codeWriter.writePushPop(vm_commands_1.STACK_OPEARTIONS.C_PUSH, _this.parser.arg1(), _this.parser.arg2());
+                        final_assm += _this.codeWriter.writePushPop(vm_commands_1.STACK_OPEARTIONS.C_PUSH, parser.arg1(), parser.arg2());
                         break;
                     case vm_commands_1.VM_COMMANDS.C_POP:
-                        final_assm += _this.codeWriter.writePushPop(vm_commands_1.STACK_OPEARTIONS.C_POP, _this.parser.arg1(), _this.parser.arg2());
+                        final_assm += _this.codeWriter.writePushPop(vm_commands_1.STACK_OPEARTIONS.C_POP, parser.arg1(), parser.arg2());
                         break;
                     case vm_commands_1.VM_COMMANDS.C_ARITHMETIC:
-                        final_assm += _this.codeWriter.writeArithmetic(_this.parser.arg1());
+                        final_assm += _this.codeWriter.writeArithmetic(parser.arg1());
+                        break;
+                    case vm_commands_1.VM_COMMANDS.C_LABEL:
+                        final_assm += _this.codeWriter.writeLabel(parser.arg1());
+                        break;
+                    case vm_commands_1.VM_COMMANDS.C_IF:
+                        final_assm += _this.codeWriter.writeIf(parser.arg1(), parser.wasPrevLogicalCommand());
+                        break;
+                    case vm_commands_1.VM_COMMANDS.C_GOTO:
+                        final_assm += _this.codeWriter.writeGoto(parser.arg1());
+                        break;
+                    case vm_commands_1.VM_COMMANDS.C_FUNCTION:
+                        final_assm += _this.codeWriter.writeFunction(parser.arg1(), parser.arg2());
+                        break;
+                    case vm_commands_1.VM_COMMANDS.C_CALL:
+                        final_assm += _this.codeWriter.writeCall(parser.arg1(), parser.arg2());
+                        break;
+                    case vm_commands_1.VM_COMMANDS.C_RETURN:
+                        final_assm += _this.codeWriter.writeReturn();
                         break;
                     default:
-                        final_assm += "TODO";
-                        break;
+                        final_assm += "TODOO";
                 }
-                _this.parser.advance();
+                parser.advance();
             }
             return final_assm.trim();
         };
     }
-    VMTranslator.prototype.getFileName = function (filePath) {
-        return FILE_NAME_REGEX.exec(filePath)[1];
+    VMTranslator.prototype.getFileNameWithoutExtenstion = function (path) {
+        return path.split(".")[0];
     };
-    VMTranslator.createAsync = function (filePath) { return __awaiter(_this, void 0, void 0, function () {
-        var translator, _a;
-        return __generator(this, function (_b) {
-            switch (_b.label) {
-                case 0:
-                    translator = new VMTranslator();
-                    _a = translator;
-                    return [4 /*yield*/, parser_1.default.createAsync(filePath)];
-                case 1:
-                    _a.parser = _b.sent();
-                    translator.codeWriter = new code_writer_1.default();
-                    return [2 /*return*/, translator];
-            }
+    VMTranslator.prototype.getFilesInDirectory = function (path) {
+        return __awaiter(this, void 0, void 0, function () {
+            var files;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, fs.readdirSync(path)];
+                    case 1:
+                        files = _a.sent();
+                        return [2 /*return*/, files];
+                }
+            });
         });
-    }); };
+    };
+    VMTranslator.prototype.filterVMFiles = function (files) {
+        return files.filter(function (file) { return VM_FILE_REGEX.test(file); });
+    };
+    VMTranslator.prototype.getFileNameInRelativePath = function (filePath) {
+        return FILE_NAME_REGEX.exec(filePath)[FIRST_MATCH];
+    };
+    VMTranslator.prototype.getFolderName = function (filePath) {
+        return FOLDER_NAME.exec(filePath)[FIRST_MATCH];
+    };
+    VMTranslator.prototype.getFileName = function (filePath) {
+        return VM_FILE_REGEX.exec(filePath)[FIRST_MATCH];
+    };
+    VMTranslator.createTranslator = function () {
+        var translator = new VMTranslator();
+        translator.codeWriter = new code_writer_1.default();
+        return translator;
+    };
     return VMTranslator;
 }());
-VMTranslator.createAsync("../prog.vm").then(function (translator) {
-    translator.save("../prog.asm");
-});
+var translator = VMTranslator.createTranslator();
+translator.save("../SimpleFunction");

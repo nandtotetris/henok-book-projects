@@ -41,9 +41,16 @@ var vm_commands_1 = require("./vm_commands");
 var NOT_FOUND = -1;
 var FIRST_MATCH = 1;
 var SECOND_MATCH = 2;
-var REMOVE_COMMENT = /\/\/[^\n]+/g;
-var PUSH_COMMAND = /push\s+([a-z]+)\s+(\d+)\b/;
-var POP_COMMAND = /pop\s+([a-z]+)\s+(\d+)\b/;
+var EMPTY_LINE = /\s*/;
+var REMOVE_COMMENT = /\/\/\s*[^\n]+/g;
+var PUSH_COMMAND = /^push\s+([a-z]+)\s+(\d+)\b/;
+var POP_COMMAND = /^pop\s+([a-z]+)\s+(\d+)\b/;
+var LABEL_COMMAND = /^label\s+([a-zA-Z][a-zA-Z_\.\d]+)\b/;
+var GOTO_COMMAND = /^goto\s+([a-zA-Z][a-zA-Z_\.\d]+)\b/;
+var IF_COMMAND = /^if-goto\s+([a-zA-Z][a-zA-Z_\.\d]+)\b/;
+var FUNCTION_COMMAND = /^function\s+([a-zA-Z][a-zA-Z_\.\d]+)\s+(\d+)\b/;
+var RETURN_COMMAND = /^return/;
+var CALL_COMMAND = /^call\s+([a-zA-Z][a-zA-Z_\.\d]+)\s+(\d+)\b/;
 var ARITHMETIC = ["add", "sub", "neg", "eq", "gt", "lt", "and", "or", "not"];
 var Parser = /** @class */ (function () {
     function Parser() {
@@ -52,14 +59,21 @@ var Parser = /** @class */ (function () {
         this.getVMCommands = function () { return _this.vm_commands; };
         this.getCurrentCommand = function () { return _this.currentCommand; };
     }
+    Parser.prototype.wasPrevLogicalCommand = function () {
+        var prevIndex = this.currentIndex - 1;
+        return (["eq", "lt", "gt"].indexOf(this.vm_commands[prevIndex]) !== NOT_FOUND);
+    };
     Parser.prototype.preprocess = function () {
-        var vm_commands = this.data.split("\n").filter(function (instruction) {
-            return instruction != "";
+        var splitCommands = this.data.split("\n");
+        var vm_commands = splitCommands.filter(function (instruction) {
+            return instruction.length > 1;
         });
         this.vm_commands = this.trimCommands(vm_commands);
     };
     Parser.prototype.trimCommands = function (vmCommands) {
-        var sanitizedCommands = vmCommands.map(function (vmCommand) { return vmCommand.trim(); });
+        var sanitizedCommands = vmCommands.map(function (vmCommand) {
+            return vmCommand.trim();
+        });
         return sanitizedCommands;
     };
     Parser.prototype.removeComment = function () {
@@ -85,6 +99,24 @@ var Parser = /** @class */ (function () {
         else if (this.isCommandArithmetic(this.currentCommand)) {
             type = vm_commands_1.VM_COMMANDS.C_ARITHMETIC;
         }
+        else if (LABEL_COMMAND.test(this.currentCommand)) {
+            type = vm_commands_1.VM_COMMANDS.C_LABEL;
+        }
+        else if (GOTO_COMMAND.test(this.currentCommand)) {
+            type = vm_commands_1.VM_COMMANDS.C_GOTO;
+        }
+        else if (IF_COMMAND.test(this.currentCommand)) {
+            type = vm_commands_1.VM_COMMANDS.C_IF;
+        }
+        else if (FUNCTION_COMMAND.test(this.currentCommand)) {
+            type = vm_commands_1.VM_COMMANDS.C_FUNCTION;
+        }
+        else if (CALL_COMMAND.test(this.currentCommand)) {
+            type = vm_commands_1.VM_COMMANDS.C_CALL;
+        }
+        else if (RETURN_COMMAND.test(this.currentCommand)) {
+            type = vm_commands_1.VM_COMMANDS.C_RETURN;
+        }
         return type;
     };
     Parser.prototype.isCommandArithmetic = function (vmCommand) {
@@ -102,6 +134,23 @@ var Parser = /** @class */ (function () {
             case vm_commands_1.VM_COMMANDS.C_PUSH:
                 firstArgument = PUSH_COMMAND.exec(this.currentCommand)[FIRST_MATCH];
                 break;
+            case vm_commands_1.VM_COMMANDS.C_LABEL:
+                firstArgument = LABEL_COMMAND.exec(this.currentCommand)[FIRST_MATCH];
+                break;
+            case vm_commands_1.VM_COMMANDS.C_GOTO:
+                firstArgument = GOTO_COMMAND.exec(this.currentCommand)[FIRST_MATCH];
+                break;
+            case vm_commands_1.VM_COMMANDS.C_IF:
+                firstArgument = IF_COMMAND.exec(this.currentCommand)[FIRST_MATCH];
+                break;
+            case vm_commands_1.VM_COMMANDS.C_FUNCTION:
+                firstArgument = FUNCTION_COMMAND.exec(this.currentCommand)[FIRST_MATCH];
+                break;
+            case vm_commands_1.VM_COMMANDS.C_CALL:
+                firstArgument = CALL_COMMAND.exec(this.currentCommand)[FIRST_MATCH];
+                break;
+            default:
+                firstArgument = "TODO";
         }
         return firstArgument;
     };
@@ -113,6 +162,12 @@ var Parser = /** @class */ (function () {
                 break;
             case vm_commands_1.VM_COMMANDS.C_PUSH:
                 secondArgument = parseInt(PUSH_COMMAND.exec(this.currentCommand)[SECOND_MATCH]);
+                break;
+            case vm_commands_1.VM_COMMANDS.C_FUNCTION:
+                secondArgument = parseInt(FUNCTION_COMMAND.exec(this.currentCommand)[SECOND_MATCH]);
+                break;
+            case vm_commands_1.VM_COMMANDS.C_CALL:
+                secondArgument = parseInt(CALL_COMMAND.exec(this.currentCommand)[SECOND_MATCH]);
                 break;
         }
         return secondArgument;

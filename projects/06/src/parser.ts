@@ -72,7 +72,7 @@ class Parser {
       this.instructions[i] = this.instructions[i].trim();
       const instruction = this.instructions[i];
       if (this.isInstructionLabel(instruction)) {
-        const symbol = this.getLabelWorld(instruction);
+        const symbol = this.getLabelName(instruction);
         if (!this.symTable.contains(symbol)) {
           this.symTable.addEntry(symbol, this.ROMInstructionIndex);
         }
@@ -82,7 +82,7 @@ class Parser {
     }
   }
 
-  getLabelWorld(instruction: string): string {
+  getLabelName(instruction: string): string {
     return LABEL.exec(instruction)[1];
   }
 

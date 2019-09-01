@@ -3,7 +3,11 @@ enum VM_COMMANDS {
   C_PUSH,
   C_POP,
   C_LABEL,
-  C_IF
+  C_IF,
+  C_GOTO,
+  C_FUNCTION,
+  C_RETURN,
+  C_CALL
 }
 
 enum STACK_OPEARTIONS {

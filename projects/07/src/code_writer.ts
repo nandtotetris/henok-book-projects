@@ -3,10 +3,16 @@ import { STACK_OPEARTIONS } from "./vm_commands";
 
 const UNIARY_COMMANDS = ["neg", "not"];
 const NOT_FOUND = -1;
+const TEMP = 5;
+const FRAME = "R13";
+const RET = "R14";
+const POINTER = 3;
+const RETURN_ADDRESS = "RETURN_ADDRESS";
 
 class CodeWriter {
   private fileName: string;
   private label: number = 1;
+  private returnIndex: number = 1;
   constructor() {}
 
   setFileName(fileName: string) {
@@ -101,7 +107,7 @@ class CodeWriter {
   }
 
   getTop(dest: string): string {
-    return "@SP\nA=M\n" + dest + "=M\n";
+    return `@SP\nA=M\n${dest}=M\n`;
   }
 
   decSP() {
@@ -177,10 +183,10 @@ class CodeWriter {
         assm = this.getBasePushAssm("THAT", index);
         break;
       case "temp":
-        assm = this.getTempPushAssm(5, index);
+        assm = this.getRelativePushAssm(TEMP, index);
         break;
       case "pointer":
-        assm = this.getTempPushAssm(3, index);
+        assm = this.getRelativePushAssm(POINTER, index);
         break;
       default:
         assm = "TODO";
@@ -208,10 +214,10 @@ class CodeWriter {
         assm = this.getBasePopAssm("THAT", index);
         break;
       case "temp":
-        assm = this.getTempPopAssm(5, index);
+        assm = this.getTempPopAssm(TEMP, index);
         break;
       case "pointer":
-        assm = this.getTempPopAssm(3, index);
+        assm = this.getTempPopAssm(POINTER, index);
         break;
       default:
         assm = "TODO";
@@ -220,7 +226,7 @@ class CodeWriter {
     return assm;
   }
 
-  getTempPushAssm(baseIndex: number, index: number) {
+  getRelativePushAssm(baseIndex: number, index: number) {
     let assm = "@" + baseIndex + "\n";
     assm += "D=A\n";
     assm += "@" + index + "\n";
@@ -246,8 +252,7 @@ class CodeWriter {
 
   getBasePushAssm(type: string, index: number) {
     let assm = "@" + type + "\n";
-    assm += "A=M\n";
-    assm += "D=A\n";
+    assm += "D=M\n";
     assm += "@" + index + "\n";
     assm += "A=A+D\n";
     assm += "D=M\n";
@@ -268,6 +273,18 @@ class CodeWriter {
     assm += "M=D\n";
 
     return assm;
+  }
+
+  saveData(src: string) {
+    let assm: string = "";
+    assm += "@R14\n";
+    assm += `M=${src}\n`;
+
+    return assm;
+  }
+
+  restoreData(dest: string) {
+    return `@R14\n${dest}=M\n`;
   }
 
   saveAddress() {
@@ -306,6 +323,191 @@ class CodeWriter {
     const saveToStack = "@SP\nA=M\nM=D\n";
     const incStackPointer = "@SP\nM=M+1\n";
     return saveToStack + incStackPointer;
+  }
+
+  writeInit() {
+    let assm = "@256\nD=A\n@SP\nM=D\n";
+    assm += this.writeCall("Sys.init", 0);
+
+    return assm;
+  }
+
+  writeLabel(label: string) {
+    return `(${label})\n`;
+  }
+
+  writeGoto(label: string) {
+    return `@${label}\n0;JMP\n\n`;
+  }
+
+  writeIf(label: string, wasPrevCommandLogical: boolean) {
+    let assm: string = this.decSP();
+    assm += this.getTop("D");
+    assm += `@${label}\nD;${wasPrevCommandLogical ? "JLT" : "JGT"}\n`;
+
+    return assm;
+  }
+
+  writeCall(functionName: string, numArgs: number) {
+    const comment = "\n// CALL BEGIN\n";
+    const commentEnd = "// CALL END\n\n";
+    let assm: string = `@${RETURN_ADDRESS}_${this.returnIndex}\n`;
+    assm += "D=A\n";
+    assm += this.incSP();
+    assm += this.pushSegmentBaseIndex("LCL");
+    assm += this.pushSegmentBaseIndex("ARG");
+    assm += this.pushSegmentBaseIndex("THIS");
+    assm += this.pushSegmentBaseIndex("THAT");
+    assm += this.setArgForTheCalledFunction(numArgs);
+    assm += this.setLocalForTheCalledFunction();
+    assm += this.writeGoto(functionName);
+    assm += `(${RETURN_ADDRESS}_${this.returnIndex})\n`;
+
+    this.returnIndex += 1;
+
+    return comment + assm + commentEnd;
+  }
+
+  writeReturn() {
+    const comment = "\n// RETURN BEGIN\n";
+    const commentEnd = "// RETURN END\n\n";
+    let assm: string = this.setFrame();
+    assm += this.dereferenceFrame(5);
+    assm += `@${RET}\n`;
+    // assm += this.saveData("D");
+    // assm += `@${TEMP}\nD=A\n@1\nD=A+D\n`;
+    // assm += this.restoreData("A");
+    // assm += this.changeDandA("R15");
+    assm += "M=D\n";
+    assm += this.decSP();
+    assm += this.getTop("D");
+    assm += "@ARG\nA=M\nM=D\n";
+    assm += this.setStackPointerToArg(1);
+    assm += this.setThatInReturn();
+    assm += this.setThisInReturn();
+    assm += this.setArgInReturn();
+    assm += this.setLocalInReturn();
+    assm += this.gotoInReturn();
+
+    return comment + assm + commentEnd;
+  }
+
+  setFrame(): string {
+    let assm: string = "@LCL\n";
+    assm += "D=M\n";
+    assm += `@${FRAME}\n`;
+    assm += "M=D\n";
+
+    return assm;
+  }
+
+  dereferenceFrame(index: number): string {
+    let assm: string = `@${index}\n`;
+    assm += "D=A\n";
+    assm += `@${FRAME}\n`;
+    assm += "A=M\n";
+    assm += "A=A-D\n";
+    assm += "D=M\n";
+
+    return assm;
+  }
+
+  changeDandA(tempRegister: string): string {
+    let assm: string = `@${tempRegister}\n`;
+    assm += "M=D\n";
+    assm += this.restoreData("A");
+    assm += "D=A\n";
+    assm += `@${tempRegister}\n`;
+    assm += "A=M\n";
+
+    return assm;
+  }
+
+  setStackPointerToArg(index: number): string {
+    let assm: string = "@ARG\n";
+    assm += "D=M\n";
+    assm += `@${index}\n`;
+    assm += "D=A+D\n";
+    assm += "@SP\n";
+    assm += "M=D\n";
+
+    return assm;
+  }
+
+  setThatInReturn(): string {
+    let assm: string = this.dereferenceFrame(1);
+    assm += "@THAT\nM=D\n";
+
+    return assm;
+  }
+
+  setThisInReturn(): string {
+    let assm: string = this.dereferenceFrame(2);
+    assm += "@THIS\nM=D\n";
+
+    return assm;
+  }
+
+  setArgInReturn(): string {
+    let assm: string = this.dereferenceFrame(3);
+    assm += "@ARG\nM=D\n";
+
+    return assm;
+  }
+
+  setLocalInReturn(): string {
+    let assm: string = this.dereferenceFrame(4);
+    assm += "@LCL\nM=D\n";
+
+    return assm;
+  }
+
+  gotoInReturn(): string {
+    let assm: string = "";
+    assm += `@${RET}\n`;
+    assm += "A=M\n";
+    assm += "0;JMP\n";
+
+    return assm;
+  }
+
+  pushSegmentBaseIndex(type: string) {
+    let assm: string = `@${type}\n`;
+    assm += "D=M\n";
+    assm += this.incSP();
+
+    return assm;
+  }
+
+  setArgForTheCalledFunction(numArgs: number) {
+    let assm: string = "@SP\n";
+    assm += "D=M\n";
+    assm += `@${numArgs}\n`;
+    assm += "D=D-A\n";
+    assm += "@5\n";
+    assm += "D=D-A\n";
+    assm += "@ARG\n";
+    assm += "M=D\n";
+
+    return assm;
+  }
+
+  setLocalForTheCalledFunction() {
+    let assm: string = "@SP\n";
+    assm += "D=M\n";
+    assm += "@LCL\n";
+    assm += "M=D\n";
+
+    return assm;
+  }
+
+  writeFunction(functionName: string, numLocals: number) {
+    let assm: string = `\n(${functionName})\n`;
+    for (let i = 0; i < numLocals; i++) {
+      assm += this.getConstantPush(0);
+    }
+
+    return assm;
   }
 }
 

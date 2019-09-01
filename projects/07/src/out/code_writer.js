@@ -3,9 +3,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var vm_commands_1 = require("./vm_commands");
 var UNIARY_COMMANDS = ["neg", "not"];
 var NOT_FOUND = -1;
+var TEMP = 5;
+var FRAME = "R13";
+var RET = "R14";
+var POINTER = 3;
+var RETURN_ADDRESS = "RETURN_ADDRESS";
 var CodeWriter = /** @class */ (function () {
     function CodeWriter() {
         this.label = 1;
+        this.returnIndex = 1;
     }
     CodeWriter.prototype.setFileName = function (fileName) {
         this.fileName = fileName;
@@ -149,10 +155,10 @@ var CodeWriter = /** @class */ (function () {
                 assm = this.getBasePushAssm("THAT", index);
                 break;
             case "temp":
-                assm = this.getTempPushAssm(5, index);
+                assm = this.getRelativePushAssm(TEMP, index);
                 break;
             case "pointer":
-                assm = this.getTempPushAssm(3, index);
+                assm = this.getRelativePushAssm(POINTER, index);
                 break;
             default:
                 assm = "TODO";
@@ -178,17 +184,17 @@ var CodeWriter = /** @class */ (function () {
                 assm = this.getBasePopAssm("THAT", index);
                 break;
             case "temp":
-                assm = this.getTempPopAssm(5, index);
+                assm = this.getTempPopAssm(TEMP, index);
                 break;
             case "pointer":
-                assm = this.getTempPopAssm(3, index);
+                assm = this.getTempPopAssm(POINTER, index);
                 break;
             default:
                 assm = "TODO";
         }
         return assm;
     };
-    CodeWriter.prototype.getTempPushAssm = function (baseIndex, index) {
+    CodeWriter.prototype.getRelativePushAssm = function (baseIndex, index) {
         var assm = "@" + baseIndex + "\n";
         assm += "D=A\n";
         assm += "@" + index + "\n";
@@ -210,8 +216,7 @@ var CodeWriter = /** @class */ (function () {
     };
     CodeWriter.prototype.getBasePushAssm = function (type, index) {
         var assm = "@" + type + "\n";
-        assm += "A=M\n";
-        assm += "D=A\n";
+        assm += "D=M\n";
         assm += "@" + index + "\n";
         assm += "A=A+D\n";
         assm += "D=M\n";
@@ -229,6 +234,15 @@ var CodeWriter = /** @class */ (function () {
         assm += this.restoreAddress();
         assm += "M=D\n";
         return assm;
+    };
+    CodeWriter.prototype.saveData = function (src) {
+        var assm = "";
+        assm += "@R14\n";
+        assm += "M=" + src + "\n";
+        return assm;
+    };
+    CodeWriter.prototype.restoreData = function (dest) {
+        return "@R14\n" + dest + "=M\n";
     };
     CodeWriter.prototype.saveAddress = function () {
         var assm = "";
@@ -259,6 +273,154 @@ var CodeWriter = /** @class */ (function () {
         var saveToStack = "@SP\nA=M\nM=D\n";
         var incStackPointer = "@SP\nM=M+1\n";
         return saveToStack + incStackPointer;
+    };
+    CodeWriter.prototype.writeInit = function () {
+        var assm = "@256\nD=A\n@SP\nM=D\n";
+        assm += this.writeCall("Sys.init", 0);
+        return assm;
+    };
+    CodeWriter.prototype.writeLabel = function (label) {
+        return "(" + label + ")\n";
+    };
+    CodeWriter.prototype.writeGoto = function (label) {
+        return "@" + label + "\n0;JMP\n\n";
+    };
+    CodeWriter.prototype.writeIf = function (label, wasPrevCommandLogical) {
+        var assm = this.decSP();
+        assm += this.getTop("D");
+        assm += "@" + label + "\nD;" + (wasPrevCommandLogical ? "JLT" : "JGT") + "\n";
+        return assm;
+    };
+    CodeWriter.prototype.writeCall = function (functionName, numArgs) {
+        var comment = "\n// CALL BEGIN\n";
+        var commentEnd = "// CALL END\n\n";
+        var assm = "@" + RETURN_ADDRESS + "_" + this.returnIndex + "\n";
+        assm += "D=A\n";
+        assm += this.incSP();
+        assm += this.pushSegmentBaseIndex("LCL");
+        assm += this.pushSegmentBaseIndex("ARG");
+        assm += this.pushSegmentBaseIndex("THIS");
+        assm += this.pushSegmentBaseIndex("THAT");
+        assm += this.setArgForTheCalledFunction(numArgs);
+        assm += this.setLocalForTheCalledFunction();
+        assm += this.writeGoto(functionName);
+        assm += "(" + RETURN_ADDRESS + "_" + this.returnIndex + ")\n";
+        this.returnIndex += 1;
+        return comment + assm + commentEnd;
+    };
+    CodeWriter.prototype.writeReturn = function () {
+        var comment = "\n// RETURN BEGIN\n";
+        var commentEnd = "// RETURN END\n\n";
+        var assm = this.setFrame();
+        assm += this.dereferenceFrame(5);
+        assm += "@" + RET + "\n";
+        // assm += this.saveData("D");
+        // assm += `@${TEMP}\nD=A\n@1\nD=A+D\n`;
+        // assm += this.restoreData("A");
+        // assm += this.changeDandA("R15");
+        assm += "M=D\n";
+        assm += this.decSP();
+        assm += this.getTop("D");
+        assm += "@ARG\nA=M\nM=D\n";
+        assm += this.setStackPointerToArg(1);
+        assm += this.setThatInReturn();
+        assm += this.setThisInReturn();
+        assm += this.setArgInReturn();
+        assm += this.setLocalInReturn();
+        assm += this.gotoInReturn();
+        return comment + assm + commentEnd;
+    };
+    CodeWriter.prototype.setFrame = function () {
+        var assm = "@LCL\n";
+        assm += "D=M\n";
+        assm += "@" + FRAME + "\n";
+        assm += "M=D\n";
+        return assm;
+    };
+    CodeWriter.prototype.dereferenceFrame = function (index) {
+        var assm = "@" + index + "\n";
+        assm += "D=A\n";
+        assm += "@" + FRAME + "\n";
+        assm += "A=M\n";
+        assm += "A=A-D\n";
+        assm += "D=M\n";
+        return assm;
+    };
+    CodeWriter.prototype.changeDandA = function (tempRegister) {
+        var assm = "@" + tempRegister + "\n";
+        assm += "M=D\n";
+        assm += this.restoreData("A");
+        assm += "D=A\n";
+        assm += "@" + tempRegister + "\n";
+        assm += "A=M\n";
+        return assm;
+    };
+    CodeWriter.prototype.setStackPointerToArg = function (index) {
+        var assm = "@ARG\n";
+        assm += "D=M\n";
+        assm += "@" + index + "\n";
+        assm += "D=A+D\n";
+        assm += "@SP\n";
+        assm += "M=D\n";
+        return assm;
+    };
+    CodeWriter.prototype.setThatInReturn = function () {
+        var assm = this.dereferenceFrame(1);
+        assm += "@THAT\nM=D\n";
+        return assm;
+    };
+    CodeWriter.prototype.setThisInReturn = function () {
+        var assm = this.dereferenceFrame(2);
+        assm += "@THIS\nM=D\n";
+        return assm;
+    };
+    CodeWriter.prototype.setArgInReturn = function () {
+        var assm = this.dereferenceFrame(3);
+        assm += "@ARG\nM=D\n";
+        return assm;
+    };
+    CodeWriter.prototype.setLocalInReturn = function () {
+        var assm = this.dereferenceFrame(4);
+        assm += "@LCL\nM=D\n";
+        return assm;
+    };
+    CodeWriter.prototype.gotoInReturn = function () {
+        var assm = "";
+        assm += "@" + RET + "\n";
+        assm += "A=M\n";
+        assm += "0;JMP\n";
+        return assm;
+    };
+    CodeWriter.prototype.pushSegmentBaseIndex = function (type) {
+        var assm = "@" + type + "\n";
+        assm += "D=M\n";
+        assm += this.incSP();
+        return assm;
+    };
+    CodeWriter.prototype.setArgForTheCalledFunction = function (numArgs) {
+        var assm = "@SP\n";
+        assm += "D=M\n";
+        assm += "@" + numArgs + "\n";
+        assm += "D=D-A\n";
+        assm += "@5\n";
+        assm += "D=D-A\n";
+        assm += "@ARG\n";
+        assm += "M=D\n";
+        return assm;
+    };
+    CodeWriter.prototype.setLocalForTheCalledFunction = function () {
+        var assm = "@SP\n";
+        assm += "D=M\n";
+        assm += "@LCL\n";
+        assm += "M=D\n";
+        return assm;
+    };
+    CodeWriter.prototype.writeFunction = function (functionName, numLocals) {
+        var assm = "\n(" + functionName + ")\n";
+        for (var i = 0; i < numLocals; i++) {
+            assm += this.getConstantPush(0);
+        }
+        return assm;
     };
     return CodeWriter;
 }());
