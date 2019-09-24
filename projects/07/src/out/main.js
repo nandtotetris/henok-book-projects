@@ -182,4 +182,4 @@ var VMTranslator = /** @class */ (function () {
     return VMTranslator;
 }());
 var translator = VMTranslator.createTranslator();
-translator.save("../SimpleFunction");
+translator.save("../NestedCall");

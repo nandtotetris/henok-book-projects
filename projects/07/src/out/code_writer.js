@@ -47,17 +47,14 @@ var CodeWriter = /** @class */ (function () {
         return binaryAssm;
     };
     CodeWriter.prototype.getBinaryAssm = function (dependentAssm) {
-        var assm = this.decSP();
-        assm += this.getTop("D");
-        assm += this.decSP();
-        assm += this.getTop("A");
+        var assm = this.popStack("D");
+        assm += this.popStack("A");
         assm += dependentAssm;
         assm += this.incSP();
         return assm;
     };
     CodeWriter.prototype.getUniaryAssm = function (dependentAssm) {
-        var assm = this.decSP();
-        assm += this.getTop("D");
+        var assm = this.popStack("D");
         assm += dependentAssm;
         assm += this.incSP();
         return assm;
@@ -89,11 +86,11 @@ var CodeWriter = /** @class */ (function () {
         this.label += 1;
         return this.getBinaryAssm(assm);
     };
-    CodeWriter.prototype.getTop = function (dest) {
-        return "@SP\nA=M\n" + dest + "=M\n";
-    };
-    CodeWriter.prototype.decSP = function () {
-        return "@SP\nM=M-1\n";
+    CodeWriter.prototype.popStack = function (dest) {
+        var assm = "";
+        assm += "@SP\nAM=M-1\n";
+        assm += dest + "=M\n";
+        return assm;
     };
     CodeWriter.prototype.writeUniaryArithmetic = function (command) {
         var assm = "";
@@ -177,17 +174,11 @@ var CodeWriter = /** @class */ (function () {
             case "local":
                 assm = this.getBasePopAssm("LCL", index);
                 break;
-            case "this":
-                assm = this.getBasePopAssm("THIS", index);
-                break;
-            case "that":
-                assm = this.getBasePopAssm("THAT", index);
-                break;
             case "temp":
-                assm = this.getTempPopAssm(TEMP, index);
+                assm = this.getPointerPopAssm(TEMP, index);
                 break;
             case "pointer":
-                assm = this.getTempPopAssm(POINTER, index);
+                assm = this.getPointerPopAssm(POINTER, index);
                 break;
             default:
                 assm = "TODO";
@@ -202,15 +193,11 @@ var CodeWriter = /** @class */ (function () {
         assm += "D=M\n";
         return assm + this.incSP();
     };
-    CodeWriter.prototype.getTempPopAssm = function (baseIndex, index) {
-        var assm = "@" + baseIndex + "\n";
-        assm += "D=A\n";
-        assm += "@" + index + "\n";
-        assm += "A=A+D\n";
-        assm += this.saveAddress();
-        assm += this.decSP();
-        assm += this.getTop("D");
-        assm += this.restoreAddress();
+    CodeWriter.prototype.getPointerPopAssm = function (baseIndex, index) {
+        var assm = "@SP\n";
+        assm += "AM=M-1\n";
+        assm += "D=M\n";
+        assm += "@" + (baseIndex + index) + "\n";
         assm += "M=D\n";
         return assm;
     };
@@ -224,13 +211,11 @@ var CodeWriter = /** @class */ (function () {
     };
     CodeWriter.prototype.getBasePopAssm = function (type, index) {
         var assm = "@" + type + "\n";
-        assm += "A=M\n";
-        assm += "D=A\n";
+        assm += "AD=M\n";
         assm += "@" + index + "\n";
-        assm += "A=A+D\n";
+        assm += "AD=A+D\n";
         assm += this.saveAddress();
-        assm += this.decSP();
-        assm += this.getTop("D");
+        assm += this.popStack("D");
         assm += this.restoreAddress();
         assm += "M=D\n";
         return assm;
@@ -246,7 +231,6 @@ var CodeWriter = /** @class */ (function () {
     };
     CodeWriter.prototype.saveAddress = function () {
         var assm = "";
-        assm += "D=A\n";
         assm += "@R13\n";
         assm += "M=D\n";
         return assm;
@@ -255,8 +239,7 @@ var CodeWriter = /** @class */ (function () {
         return "@R13\nA=M\n";
     };
     CodeWriter.prototype.getStaticPop = function (index) {
-        var assm = this.decSP();
-        assm += this.getTop("D");
+        var assm = this.popStack("D");
         assm += "@" + this.fileName + "." + index + "\n";
         assm += "M=D\n";
         return assm;
@@ -270,9 +253,11 @@ var CodeWriter = /** @class */ (function () {
         return assembly + this.incSP();
     };
     CodeWriter.prototype.incSP = function () {
-        var saveToStack = "@SP\nA=M\nM=D\n";
-        var incStackPointer = "@SP\nM=M+1\n";
-        return saveToStack + incStackPointer;
+        var assm = "@SP\n";
+        assm += "AM=M+1\n";
+        assm += "A=A-1\n";
+        assm += "M=D\n";
+        return assm;
     };
     CodeWriter.prototype.writeInit = function () {
         var assm = "@256\nD=A\n@SP\nM=D\n";
@@ -286,9 +271,8 @@ var CodeWriter = /** @class */ (function () {
         return "@" + label + "\n0;JMP\n\n";
     };
     CodeWriter.prototype.writeIf = function (label, wasPrevCommandLogical) {
-        var assm = this.decSP();
-        assm += this.getTop("D");
-        assm += "@" + label + "\nD;" + (wasPrevCommandLogical ? "JLT" : "JGT") + "\n";
+        var assm = this.popStack("D");
+        assm += "@" + label + "\nD;JNE\n";
         return assm;
     };
     CodeWriter.prototype.writeCall = function (functionName, numArgs) {
@@ -314,13 +298,8 @@ var CodeWriter = /** @class */ (function () {
         var assm = this.setFrame();
         assm += this.dereferenceFrame(5);
         assm += "@" + RET + "\n";
-        // assm += this.saveData("D");
-        // assm += `@${TEMP}\nD=A\n@1\nD=A+D\n`;
-        // assm += this.restoreData("A");
-        // assm += this.changeDandA("R15");
         assm += "M=D\n";
-        assm += this.decSP();
-        assm += this.getTop("D");
+        assm += this.popStack("D");
         assm += "@ARG\nA=M\nM=D\n";
         assm += this.setStackPointerToArg(1);
         assm += this.setThatInReturn();
@@ -341,18 +320,8 @@ var CodeWriter = /** @class */ (function () {
         var assm = "@" + index + "\n";
         assm += "D=A\n";
         assm += "@" + FRAME + "\n";
-        assm += "A=M\n";
-        assm += "A=A-D\n";
+        assm += "A=M-D\n";
         assm += "D=M\n";
-        return assm;
-    };
-    CodeWriter.prototype.changeDandA = function (tempRegister) {
-        var assm = "@" + tempRegister + "\n";
-        assm += "M=D\n";
-        assm += this.restoreData("A");
-        assm += "D=A\n";
-        assm += "@" + tempRegister + "\n";
-        assm += "A=M\n";
         return assm;
     };
     CodeWriter.prototype.setStackPointerToArg = function (index) {

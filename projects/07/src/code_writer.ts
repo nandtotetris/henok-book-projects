@@ -52,10 +52,8 @@ class CodeWriter {
   }
 
   getBinaryAssm(dependentAssm: string) {
-    let assm: string = this.decSP();
-    assm += this.getTop("D");
-    assm += this.decSP();
-    assm += this.getTop("A");
+    let assm: string = this.popStack("D");
+    assm += this.popStack("A");
     assm += dependentAssm;
     assm += this.incSP();
 
@@ -63,8 +61,7 @@ class CodeWriter {
   }
 
   getUniaryAssm(dependentAssm: string) {
-    let assm: string = this.decSP();
-    assm += this.getTop("D");
+    let assm: string = this.popStack("D");
     assm += dependentAssm;
     assm += this.incSP();
 
@@ -106,12 +103,12 @@ class CodeWriter {
     return this.getBinaryAssm(assm);
   }
 
-  getTop(dest: string): string {
-    return `@SP\nA=M\n${dest}=M\n`;
-  }
+  popStack(dest: string): string {
+    let assm: string = "";
+    assm += "@SP\nAM=M-1\n";
+    assm += `${dest}=M\n`;
 
-  decSP() {
-    return "@SP\nM=M-1\n";
+    return assm;
   }
 
   writeUniaryArithmetic(command: string): string {
@@ -207,17 +204,11 @@ class CodeWriter {
       case "local":
         assm = this.getBasePopAssm("LCL", index);
         break;
-      case "this":
-        assm = this.getBasePopAssm("THIS", index);
-        break;
-      case "that":
-        assm = this.getBasePopAssm("THAT", index);
-        break;
       case "temp":
-        assm = this.getTempPopAssm(TEMP, index);
+        assm = this.getPointerPopAssm(TEMP, index);
         break;
       case "pointer":
-        assm = this.getTempPopAssm(POINTER, index);
+        assm = this.getPointerPopAssm(POINTER, index);
         break;
       default:
         assm = "TODO";
@@ -236,15 +227,11 @@ class CodeWriter {
     return assm + this.incSP();
   }
 
-  getTempPopAssm(baseIndex: number, index: number) {
-    let assm = "@" + baseIndex + "\n";
-    assm += "D=A\n";
-    assm += "@" + index + "\n";
-    assm += "A=A+D\n";
-    assm += this.saveAddress();
-    assm += this.decSP();
-    assm += this.getTop("D");
-    assm += this.restoreAddress();
+  getPointerPopAssm(baseIndex: number, index: number) {
+    let assm: string = "@SP\n";
+    assm += "AM=M-1\n";
+    assm += "D=M\n";
+    assm += `@${baseIndex + index}\n`;
     assm += "M=D\n";
 
     return assm;
@@ -262,13 +249,11 @@ class CodeWriter {
 
   getBasePopAssm(type: string, index: number) {
     let assm = "@" + type + "\n";
-    assm += "A=M\n";
-    assm += "D=A\n";
+    assm += "AD=M\n";
     assm += "@" + index + "\n";
-    assm += "A=A+D\n";
+    assm += "AD=A+D\n";
     assm += this.saveAddress();
-    assm += this.decSP();
-    assm += this.getTop("D");
+    assm += this.popStack("D");
     assm += this.restoreAddress();
     assm += "M=D\n";
 
@@ -289,7 +274,6 @@ class CodeWriter {
 
   saveAddress() {
     let assm: string = "";
-    assm += "D=A\n";
     assm += "@R13\n";
     assm += "M=D\n";
 
@@ -301,8 +285,7 @@ class CodeWriter {
   }
 
   getStaticPop(index: number) {
-    let assm: string = this.decSP();
-    assm += this.getTop("D");
+    let assm: string = this.popStack("D");
     assm += "@" + this.fileName + "." + index + "\n";
     assm += "M=D\n";
 
@@ -320,9 +303,12 @@ class CodeWriter {
   }
 
   incSP() {
-    const saveToStack = "@SP\nA=M\nM=D\n";
-    const incStackPointer = "@SP\nM=M+1\n";
-    return saveToStack + incStackPointer;
+    let assm: string = "@SP\n";
+    assm += "AM=M+1\n";
+    assm += "A=A-1\n";
+    assm += "M=D\n";
+
+    return assm;
   }
 
   writeInit() {
@@ -341,9 +327,8 @@ class CodeWriter {
   }
 
   writeIf(label: string, wasPrevCommandLogical: boolean) {
-    let assm: string = this.decSP();
-    assm += this.getTop("D");
-    assm += `@${label}\nD;${wasPrevCommandLogical ? "JLT" : "JGT"}\n`;
+    let assm: string = this.popStack("D");
+    assm += `@${label}\nD;JNE\n`;
 
     return assm;
   }
@@ -374,13 +359,8 @@ class CodeWriter {
     let assm: string = this.setFrame();
     assm += this.dereferenceFrame(5);
     assm += `@${RET}\n`;
-    // assm += this.saveData("D");
-    // assm += `@${TEMP}\nD=A\n@1\nD=A+D\n`;
-    // assm += this.restoreData("A");
-    // assm += this.changeDandA("R15");
     assm += "M=D\n";
-    assm += this.decSP();
-    assm += this.getTop("D");
+    assm += this.popStack("D");
     assm += "@ARG\nA=M\nM=D\n";
     assm += this.setStackPointerToArg(1);
     assm += this.setThatInReturn();
@@ -405,20 +385,8 @@ class CodeWriter {
     let assm: string = `@${index}\n`;
     assm += "D=A\n";
     assm += `@${FRAME}\n`;
-    assm += "A=M\n";
-    assm += "A=A-D\n";
+    assm += "A=M-D\n";
     assm += "D=M\n";
-
-    return assm;
-  }
-
-  changeDandA(tempRegister: string): string {
-    let assm: string = `@${tempRegister}\n`;
-    assm += "M=D\n";
-    assm += this.restoreData("A");
-    assm += "D=A\n";
-    assm += `@${tempRegister}\n`;
-    assm += "A=M\n";
 
     return assm;
   }

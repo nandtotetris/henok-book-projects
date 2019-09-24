@@ -148,4 +148,4 @@ class VMTranslator {
 }
 
 const translator = VMTranslator.createTranslator();
-translator.save("../SimpleFunction");
+translator.save("../NestedCall");
