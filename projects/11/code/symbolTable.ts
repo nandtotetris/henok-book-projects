@@ -75,10 +75,10 @@ class SymbolTable {
 
   kindOf(name: string): ALL_KINDS {
     let kind: ALL_KINDS = ALL_KINDS.NONE;
-    if (this.classSymTable.hasOwnProperty(name)) {
-      kind = this.classSymTable[name][KIND];
-    } else if (this.methodSymTable.hasOwnProperty(name)) {
+    if (this.methodSymTable.hasOwnProperty(name)) {
       kind = this.methodSymTable[name][KIND];
+    } else if (this.classSymTable.hasOwnProperty(name)) {
+      kind = this.classSymTable[name][KIND];
     }
 
     return kind;
@@ -86,10 +86,10 @@ class SymbolTable {
 
   typeOf(name: string): string {
     let type: string = "UNKNOWN";
-    if (this.classSymTable.hasOwnProperty(name)) {
-      type = this.classSymTable[name][TYPE];
-    } else if (this.methodSymTable.hasOwnProperty(name)) {
+    if (this.methodSymTable.hasOwnProperty(name)) {
       type = this.methodSymTable[name][TYPE];
+    } else if (this.classSymTable.hasOwnProperty(name)) {
+      type = this.classSymTable[name][TYPE];
     }
 
     return type;
@@ -97,10 +97,10 @@ class SymbolTable {
 
   indexOf(name: string): number {
     let index: number = -1;
-    if (this.classSymTable.hasOwnProperty(name)) {
-      index = this.classSymTable[name][INDEX];
-    } else if (this.methodSymTable.hasOwnProperty(name)) {
+    if (this.methodSymTable.hasOwnProperty(name)) {
       index = this.methodSymTable[name][INDEX];
+    } else if (this.classSymTable.hasOwnProperty(name)) {
+      index = this.classSymTable[name][INDEX];
     }
 
     return index;

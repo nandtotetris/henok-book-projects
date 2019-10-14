@@ -23,7 +23,6 @@ class CompilationEngine {
   private whileIndex: number = -1;
   private vmWritter: VMWritter;
   private tokenizer: Tokenizer;
-  // private data: string = "";
 
   constructor(inputFile: string) {
     this.tokenizer = new Tokenizer(inputFile);

@@ -8,13 +8,30 @@
  * Note: Jack compilers implement multiplication and division using OS method calls.
  */
 class Math {
+    static Array allShifts;
 
     /** Initializes the library. */
     function void init() {
+        var int counter, shift;
+        let allShifts = Array.new(16);
+        let shift = 1;
+        let counter = 0;
+
+        while(counter < 16) {
+            let allShifts[counter] = shift;
+            let shift = shift + shift;
+            let counter = counter + 1;
+        }
+
+        return;
     }
 
     /** Returns the absolute value of x. */
     function int abs(int x) {
+        if(x < 0) {
+            let x = -x;
+        }
+        return x;
     }
 
     /** Returns the product of x and y. 
@@ -23,6 +40,20 @@ class Math {
      *  the Jack expressions x*y and multiply(x,y) return the same value.
      */
     function int multiply(int x, int y) {
+        var int sum, shiftedX, counter;
+        let sum = 0;
+        let counter = 0;
+        let shiftedX = x;
+
+        while(counter < 16) {
+            if(Math.bit(y, counter)) {
+                let sum = sum + shiftedX;
+            }
+            let shiftedX = shiftedX + shiftedX;
+            let counter = counter + 1;
+        }
+        
+        return sum; 
     }
 
     /** Returns the integer part of x/y.
@@ -31,17 +62,79 @@ class Math {
      *  the Jack expressions x/y and divide(x,y) return the same value.
      */
     function int divide(int x, int y) {
+        var boolean isPositive;
+        var int q, result;
+
+        if((x > 0) = (y > 0)) {
+            let isPositive = true;
+        }
+
+        let x = Math.abs(x);
+        let y = Math.abs(y);
+
+        if(y > x) {
+            return 0;
+        }
+
+        let q = Math.divide(x, y + y);
+        if((x - (2 * q * y)) < y) {
+            let result =  q + q;
+        }
+        else {
+            let result =  q + q + 1;
+        }
+
+
+        if(~isPositive) {
+            let result = -result;
+        }
+
+        return result;
     }
 
     /** Returns the integer part of the square root of x. */
     function int sqrt(int x) {
+        var int y, halfN, t1, t2;
+        let y = 0;
+        // half of the register size
+        let halfN = 7;
+
+        while(~(halfN < 0)) {
+            let t1 = y + allShifts[halfN];
+            let t2 = t1 * t1;
+            if(~(t2 > x) & (t2 > 0)) {
+                let y = t1;
+            }
+
+            let halfN = halfN - 1;
+        }
+
+        return y;
     }
 
     /** Returns the greater number. */
     function int max(int a, int b) {
+        if(a > b) {
+            return a;
+        }
+        return b;
     }
 
     /** Returns the smaller number. */
     function int min(int a, int b) {
+        if(a < b) {
+            return a;
+        }
+        return b;
+    }
+
+    /** Checks jth bit of a given number */
+    function boolean bit(int num, int j) {
+        return ~((num & allShifts[j]) =  0);
+    }
+
+    /** Returns two the power of j*/
+    function int twoToThe(int j) {
+        return allShifts[j];
     }
 }

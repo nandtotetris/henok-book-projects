@@ -10,8 +10,9 @@ class Main {
     function void main() {
         var String s;
         var String i;
+        var boolean res;
         
-        let s = String.new(0); // a zero-capacity string should be supported
+        let s = String.new(0);
         do s.dispose();
 
         let s = String.new(6); // capacity 6, make sure that length 5 is displayed

@@ -72,31 +72,31 @@ var SymbolTable = /** @class */ (function () {
     };
     SymbolTable.prototype.kindOf = function (name) {
         var kind = ALL_KINDS.NONE;
-        if (this.classSymTable.hasOwnProperty(name)) {
-            kind = this.classSymTable[name][KIND];
-        }
-        else if (this.methodSymTable.hasOwnProperty(name)) {
+        if (this.methodSymTable.hasOwnProperty(name)) {
             kind = this.methodSymTable[name][KIND];
+        }
+        else if (this.classSymTable.hasOwnProperty(name)) {
+            kind = this.classSymTable[name][KIND];
         }
         return kind;
     };
     SymbolTable.prototype.typeOf = function (name) {
         var type = "UNKNOWN";
-        if (this.classSymTable.hasOwnProperty(name)) {
-            type = this.classSymTable[name][TYPE];
-        }
-        else if (this.methodSymTable.hasOwnProperty(name)) {
+        if (this.methodSymTable.hasOwnProperty(name)) {
             type = this.methodSymTable[name][TYPE];
+        }
+        else if (this.classSymTable.hasOwnProperty(name)) {
+            type = this.classSymTable[name][TYPE];
         }
         return type;
     };
     SymbolTable.prototype.indexOf = function (name) {
         var index = -1;
-        if (this.classSymTable.hasOwnProperty(name)) {
-            index = this.classSymTable[name][INDEX];
-        }
-        else if (this.methodSymTable.hasOwnProperty(name)) {
+        if (this.methodSymTable.hasOwnProperty(name)) {
             index = this.methodSymTable[name][INDEX];
+        }
+        else if (this.classSymTable.hasOwnProperty(name)) {
+            index = this.classSymTable[name][INDEX];
         }
         return index;
     };

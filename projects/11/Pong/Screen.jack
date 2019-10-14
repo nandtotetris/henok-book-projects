@@ -1,0 +1,305 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/12/Screen.jack
+
+/**
+ * A library of functions for displaying graphics on the screen.
+ * The Hack physical screen consists of 512 rows (indexed 0..511, top to bottom)
+ * of 256 pixels each (indexed 0..255, left to right). The top left pixel on 
+ * the screen is indexed (0,0).
+ */
+class Screen {
+    static Array maskHorizontalLine;
+    static Array allShifts;
+    static boolean color;
+    static int screenBase;
+
+    /** Initializes the Screen. */
+    function void init() {
+        var int shift, counter, oddMask;
+        let oddMask = 1;
+        let shift = 1;
+        let counter = 0;
+        let maskHorizontalLine = Array.new(15);
+        let allShifts = Array.new(16);
+        let screenBase = 16384;
+        let color = true;
+
+        while(counter < 16) {
+            let allShifts[counter] = shift;
+            let shift = shift + shift;
+
+            if(~(counter = 15)) {
+                let maskHorizontalLine[14 - counter] = oddMask;
+                let oddMask = shift + shift - 1;
+            }
+            
+            let counter = counter + 1;
+        }
+
+        return;
+    }
+
+    /** Erases the entire screen. */
+    function void clearScreen() {
+        var int i;
+        let i = 0;
+        while( i < 8192 ) {
+            let screenBase[i] = 0;
+            let i = i + 1;
+        }
+        return;
+    }
+
+    /** Sets the current color, to be used for all subsequent drawXXX commands.
+     *  Black is represented by true, white by false. */
+    function void setColor(boolean b) {
+        let color = b;
+        return;
+    }
+
+
+    /** Draws the (x,y) pixel, using the current color. */
+    function void drawPixel(int x, int y) {
+        var int relativeAddress, mask, colOffset;
+        let colOffset = x / 16;
+        let relativeAddress = (32 * y) + colOffset;
+        let mask = allShifts[(x & 15)];
+        
+        if(color) {
+            let screenBase[relativeAddress] = screenBase[relativeAddress] |  mask;
+        } else {
+            let screenBase[relativeAddress] = screenBase[relativeAddress] &  ~mask;
+        }
+
+        return;
+    }
+
+    /** Draws a line from pixel (x1,y1) to pixel (x2,y2), using the current color. */
+    function void drawLine(int x1, int y1, int x2, int y2) {
+        var int dx, dy, a, b, adyminusbdx, xDirection, yDirection, ady, bdx, temp;
+        var boolean xCondition, yCondition;
+        let adyminusbdx = 0;
+        let xDirection = 1;
+        let yDirection = 1;
+        let a = 0;
+        let b = 0;
+
+        if( x1 > x2 ) {
+            let temp = x1;
+            let x1 = x2;
+            let x2 = temp;
+            let temp = y1;
+            let y1 = y2;
+            let y2 = temp;
+        }
+
+        let dx = x2 - x1;
+        let dy = y2 - y1;
+
+
+        if(dx = 0) {
+            do Screen.drawVerticalLine(y1, y2, x1);
+            return;
+        } else {
+            if(dy = 0) {
+                do Screen.drawHorizontalLine(x1, x2, y1);
+            } else {
+                do Screen.drawDiagonalLine(x1, y1, x2, y2, dx, dy);
+            }
+        }
+
+        return;
+    }
+
+    function void drawDiagonalLine(int x1, int y1, int x2, int y2, int dx, int dy) {
+        var int a, b;
+        var int adyMinusbdx;
+        var int yDirection;
+
+        let a = 0;
+        let b = 0;
+        let adyMinusbdx = 0;
+        
+        if( dy < 0 ) {
+            let yDirection = -1;
+        }
+        else {
+            let yDirection = 1;
+        }
+
+        while( ~(a > dx) & (((yDirection = 1) & ~(b > dy)) | ((yDirection = -1) & ~(b < dy))) ) {
+            do Screen.drawPixel( x1+a, y1+b );
+            if( adyMinusbdx < 0 ) {
+                let a = a + 1;
+                let adyMinusbdx = adyMinusbdx + (dy*yDirection);
+            }
+            else {
+                let b = b + yDirection;
+                let adyMinusbdx = adyMinusbdx - dx;
+            }
+        }
+        return;
+    }
+
+    function void drawMultiplePixel(int address, int x1, int x2) {
+        var int maskIndex, maskIndex1, mask, mask1;
+
+        if((x1 = 0) & (x2 = 15)) {
+            let screenBase[address] = color;
+            // do Output.printInt(screenBase[address]);
+            return;
+        }
+
+        if(x2 = 15) {
+            let maskIndex = 16 - x1 - 1;
+            let mask = maskHorizontalLine[maskIndex];
+
+            if(color) {
+                let screenBase[address] = screenBase[address] | ~mask;
+            } else {
+                let screenBase[address] = screenBase[address] & mask;
+            }
+        } else {
+            if(x1 = 0) {
+                let maskIndex = 16 - x2 - 2;
+                let mask = ~(maskHorizontalLine[maskIndex]);
+
+                if(color) {
+                    let screenBase[address] = screenBase[address] | ~mask;
+                } else {
+                    let screenBase[address] = screenBase[address] & mask;
+                }
+                
+            } else {
+                let maskIndex = 16 - x1 - 1;
+                let mask = ~maskHorizontalLine[maskIndex];
+
+                let maskIndex1 = 16 - x2 - 2;
+                let mask1 = (maskHorizontalLine[maskIndex1]);
+
+                let mask = mask & mask1;
+                if(color) {
+                    let screenBase[address] = screenBase[address] | mask;
+                } else {
+                    let screenBase[address] = screenBase[address] & ~mask;
+                }
+            }
+        }
+
+        return;
+    }   
+
+    function void drawHorizontalLine(int x1, int x2, int y) {
+        var int relativeAddress1, relativeAddress2, colOffset1, colOffset2, relativeAddressDiff;
+        var int rowDistance, address;
+        var int left, center, right;
+
+        if(x1 > x2) {
+            let x1 = x1 + x2;
+            let x2 = x1 - x2;
+            let x1 = x1 - x2;
+        }
+
+
+        let rowDistance = 32 * y;
+        let colOffset1 = x1 / 16;
+        let x1 = x1 & 15;
+        let relativeAddress1 = (rowDistance) + colOffset1;
+
+        let colOffset2 = x2 / 16;
+        let x2 = x2 & 15;
+        let relativeAddress2 = (rowDistance) + colOffset2;
+
+        let relativeAddressDiff = colOffset2 - colOffset1;
+
+        if(relativeAddressDiff = 0) {
+            let left = relativeAddress1;
+            do Screen.drawMultiplePixel(left, x1, x2);
+        } else {
+            if(relativeAddressDiff = 1) {
+                let left = relativeAddress1;
+                do Screen.drawMultiplePixel(left, x1, 15);
+                let right = relativeAddress2;
+                do Screen.drawMultiplePixel(right, 0, x2);
+            } else {
+                let left = relativeAddress1;
+                do Screen.drawMultiplePixel(left, x1, 15);
+
+                let address = relativeAddress1 + 1;
+                while(relativeAddressDiff > 1) {
+                    do Screen.drawMultiplePixel(address, 0, 15);
+                    let address = address + 1;
+                    let relativeAddressDiff = relativeAddressDiff - 1;
+                }
+
+                let right = relativeAddress2;
+                do Screen.drawMultiplePixel(right, 0, x2);
+            }
+        }
+
+        return;
+    }
+
+    function void drawVerticalLine(int y1, int y2, int x) {
+        var int b, dy;
+        let b = 0;
+
+        if(y1 > y2) {
+            let y1 = y1 + y2;
+            let y2 = y1 - y2;
+            let y1 = y1 - y2;
+        }
+
+        let dy = y2 -y1;
+
+        while(~(b > dy)) {
+            do Screen.drawPixel(x, y1 + b);
+            let b = b + 1;
+        }
+
+        return;
+    }
+
+    /** Draws a filled rectangle whose top left corner is (x1, y1)
+     * and bottom right corner is (x2,y2), using the current color. */
+    function void drawRectangle(int x1, int y1, int x2, int y2) {
+        if(x1 > x2) {
+            let x1 = x1 + x2;
+            let x2 = x1 - x2;
+            let x1 = x1 - x2;
+        }
+
+        if(y1 > y2) {
+            let y1 = y1 + y2;
+            let y2 = y1 - y2;
+            let y1 = y1 - y2;
+        }
+        
+        while(~(y1 > y2)) {
+            do Screen.drawHorizontalLine(x1, x2, y1);
+            let y1 = y1 + 1;
+        }
+
+        return;
+    }
+
+    /** Draws a filled circle of radius r<=181 around (x,y), using the current color. */
+    function void drawCircle(int x, int y, int r) {
+        var int negR, x1, y1, x2, y2, sqroot, dy;
+        let negR = -r;
+        while(~(negR > r)) {
+            let dy = negR;
+            let sqroot = Math.sqrt((r*r) - (dy*dy));
+
+            let x1 = x - sqroot;
+            let y1 = y + dy;
+            let x2 = x + sqroot;
+
+            do Screen.drawHorizontalLine(x1, x2, y1);
+            let negR = negR + 1;
+        }
+        return;
+    }
+}

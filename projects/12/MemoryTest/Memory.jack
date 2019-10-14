@@ -1,0 +1,160 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/12/Memory.jack
+
+/**
+ * This library provides two services: direct access to the computer's main
+ * memory (RAM), and allocation and recycling of memory blocks. The Hack RAM
+ * consists of 32,768 words, each holding a 16-bit binary number.
+ */ 
+class Memory {
+    static Array ram;
+    static Array heap;
+    static Array freeList;
+    static Array prevBlock;
+    static int LENGTH;
+    static int NEXT;
+    static int BACK;
+
+    /** Initializes the class. */
+    function void init() {
+        let ram = 0;
+        let heap = 2048;
+        let LENGTH = 0;
+        let NEXT = 1;
+        let BACK = -1;
+        let freeList = heap;
+        // heap address end -  heap address start (16383 - 2048 - 1(for the header part))
+        let freeList[LENGTH] = 14336;
+        let freeList[NEXT] = 0;
+
+        return;
+    }
+
+    /** Returns the RAM value at the given address. */
+    function int peek(int address) {
+        return ram[address];
+    }
+
+    /** Sets the RAM value at the given address to the given value. */
+    function void poke(int address, int value) {
+        let ram[address] = value;
+        return;
+    }
+
+    /** Finds the current block, which can hold the given value */
+    function int searchFirstFit(int size) {
+        var Array currentBlock, bestBlock, backBlock;
+        var boolean isFirstMatch;
+
+        let bestBlock = null;
+        let backBlock = null;
+        let currentBlock = freeList;
+        let isFirstMatch = true;
+
+        while(~(currentBlock = null)) {
+            if((isFirstMatch | (currentBlock[LENGTH] > size))) {
+                let bestBlock = currentBlock;
+                let isFirstMatch = false;
+                let prevBlock = backBlock;
+            } 
+
+            let backBlock = currentBlock;
+            let currentBlock = currentBlock[NEXT];
+        }
+
+        if(bestBlock = null) {
+            do Memory.defragment(size);
+            return Memory.searchFirstFit(size);
+        }
+
+        return bestBlock;
+    }
+
+    /** Finds an available RAM block of the given size and returns
+     *  a reference to its base address. */
+    function int alloc(int size) {
+        var int blockAndSizeDifference;
+        var Array freeBlock, block, nextFreeBlock;
+        let freeBlock = Memory.searchFirstFit(size);
+        let blockAndSizeDifference = 0;
+
+        if(~(freeBlock = null)) {
+            let blockAndSizeDifference = freeBlock[LENGTH] - size;
+            
+            /** check if avaliable space in the block, 
+            * and return the part or the whole block. */
+            if(blockAndSizeDifference > 2) {
+                let block = freeBlock + freeBlock[LENGTH] - size;
+                let freeBlock[LENGTH] = freeBlock[LENGTH] - size - 2;
+                let block[BACK] = size + 1;
+            }
+            else {
+                let block = freeBlock + 1;
+                let block[BACK] = size + 1;
+                if(prevBlock = null) {
+                    let freeList = freeBlock[NEXT];
+                } else {
+                    let prevBlock[NEXT] = freeBlock[NEXT];
+                }
+            }
+        }
+        
+
+        return block;
+    }
+
+    /** De-allocates the given object (cast as an array) by making
+     *  it available for future allocations. */
+    function void deAlloc(Array o) {
+        var Array segment;
+        let segment = o - 1;
+        let segment[LENGTH] = o[BACK];
+
+        // add segment into the freeList, at first
+        let segment[NEXT] = freeList;
+        let freeList = segment;
+
+        return;
+    }   
+
+    /** Combines small sized block to  larger ones 
+    * which can hold the given size if any */
+    function void defragment(int size) {
+        var Array currentBlock, nextBlock, innerBlock, innerBlockNext, innerPass;
+        var int totalLength;
+        var boolean areConsecutive, loop, defragment;
+        let currentBlock = freeList;
+        let loop = true;
+        let defragment = true;
+
+        while(defragment & ~(currentBlock = null)) {
+            let totalLength = currentBlock[LENGTH];
+            let innerBlock = currentBlock;
+            let innerBlockNext = innerBlock[NEXT];
+            while(defragment & loop) {
+                let areConsecutive = ((innerBlock + innerBlock[LENGTH]) = innerBlockNext);
+                if(areConsecutive) {
+                    let totalLength = totalLength + innerBlockNext[LENGTH];
+                    let innerPass = innerBlockNext[NEXT];
+                } else {
+                    let loop = false;
+                }
+
+                let defragment = (totalLength < size) = true;
+
+                let innerBlock = innerBlockNext;
+                let innerBlockNext = innerBlock[NEXT];
+            }
+            let currentBlock[LENGTH] = totalLength;
+            let currentBlock[NEXT] = innerPass;
+
+            let currentBlock = currentBlock[NEXT];
+
+            let defragment = (totalLength < size) = true;
+
+            return;
+        }
+    } 
+}
